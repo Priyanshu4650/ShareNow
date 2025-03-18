@@ -7,10 +7,17 @@ const os = require('os');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://priyanshu4650.github.io'
+  ],
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 app.use(requestIp.mw());
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 
 // Get local IP address
 function getLocalIP() {
@@ -30,10 +37,44 @@ const LOCAL_IP = getLocalIP();
 console.log(`Server local IP: ${LOCAL_IP}`);
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ 
+  server,
+  path: '/',
+  clientTracking: true
+});
 
-// Store shared text for different networks
+// Map to store shared text for each network
 const networkSharedText = new Map();
+
+// Function to clear text for a specific network
+const clearNetworkText = (networkId) => {
+    if (networkSharedText.has(networkId)) {
+        networkSharedText.set(networkId, "");
+        
+        // Notify all clients in this network that text has been cleared
+        wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN && client.networkId === networkId) {
+                client.send(JSON.stringify({
+                    type: "notification",
+                    notification: "Text has been automatically cleared after 10 minutes."
+                }));
+                
+                // Send empty text to all clients
+                client.send(JSON.stringify({
+                    type: "latestText",
+                    text: ""
+                }));
+            }
+        });
+    }
+};
+
+// Function to schedule text clearing for a network
+const scheduleTextClearing = (networkId) => {
+    setTimeout(() => {
+        clearNetworkText(networkId);
+    }, 10 * 60 * 1000); // 10 minutes in milliseconds
+};
 
 // Helper function to get network identifier from IP
 function getNetworkId(req) {
@@ -107,6 +148,9 @@ wss.on("connection", (ws, req) => {
             networkSharedText.set(networkId, data.text);
             console.log(`Saving text for network ${networkId}:`, data.text);
             
+            // Schedule clearing when new text is saved
+            scheduleTextClearing(networkId);
+            
             // Notify other clients about the update
             wss.clients.forEach((client) => {
                 if (client !== ws && client.readyState === WebSocket.OPEN && client.networkId === networkId) {
@@ -121,7 +165,7 @@ wss.on("connection", (ws, req) => {
             ws.send(JSON.stringify({
                 type: "save",
                 text: data.text,
-                notification: "Text saved successfully!"
+                notification: "Text saved successfully! (Will be cleared after 10 minutes)"
             }));
         } else if(data.type === "getLatest") {
             // Send latest text to requesting client
@@ -144,10 +188,8 @@ wss.on('error', (error) => {
     console.error('WebSocket Server Error:', error);
 });
 
-server.listen(PORT, '0.0.0.0', () => { 
-    console.log(`Server is running on:`);
-    console.log(`- Local: http://localhost:${PORT}`);
-    console.log(`- Network: http://${LOCAL_IP}:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 // Handle server errors

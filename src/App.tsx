@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./App.css"; 
 
-// Get the current hostname
-const hostname = window.location.hostname;
-const port = import.meta.env.VITE_SERVER_PORT || "8000";
-const SERVER_URL = `ws://${hostname}:${port}`;
+// Get the current environment
+const isDevelopment = import.meta.env.DEV;
 
+// Update WebSocket URL based on environment
+const SERVER_URL = isDevelopment 
+  ? 'ws://localhost:8000'  // Development environment
+  : 'wss://sharenow-v77d.onrender.com';  // Production environment
+
+console.log('Environment:', isDevelopment ? 'Development' : 'Production');
 console.log('Connecting to WebSocket server at:', SERVER_URL);
 
 const App: React.FC = () => {
@@ -27,43 +31,59 @@ const App: React.FC = () => {
   }, [ws]);
 
   useEffect(() => {
-    const socket = new WebSocket(SERVER_URL);
-    setWs(socket);
+    const connectWebSocket = () => {
+      const socket = new WebSocket(SERVER_URL);
 
-    socket.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      
-      if(data.type === "init") {
-        setTextInput(data.text);
-        setIsExisting(data.text !== "");
-        setNetworkId(data.networkId);
-      } else if(data.type === "save" && !data.notification.includes("update")) {
-        // Only update text for the sender
-        setTextInput(data.text);
-        setIsExisting(data.text !== "");
-        setNotification(data.notification);
-        setTimeout(() => setNotification(""), 5000);
-      } else if(data.type === "notification") {
-        // For other clients, show update notification
-        setNotification(data.notification);
-        setNeedsUpdate(true);
-      } else if(data.type === "latestText") {
-        // Handle response for latest text request
-        setTextInput(data.text);
-        setIsExisting(data.text !== "");
-        setNotification("Text updated successfully!");
-        setTimeout(() => setNotification(""), 3000);
+      socket.onopen = () => {
+        console.log('WebSocket connection established');
+      };
+
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      socket.onclose = () => {
+        console.log('WebSocket connection closed');
+        // Optional: Implement reconnection logic
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      socket.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        
+        if(data.type === "init") {
+          setTextInput(data.text);
+          setIsExisting(data.text !== "");
+          setNetworkId(data.networkId);
+        } else if(data.type === "save" && !data.notification.includes("update")) {
+          // Only update text for the sender
+          setTextInput(data.text);
+          setIsExisting(data.text !== "");
+          setNotification(data.notification);
+          setTimeout(() => setNotification(""), 5000);
+        } else if(data.type === "notification") {
+          // For other clients, show update notification
+          setNotification(data.notification);
+          setNeedsUpdate(true);
+        } else if(data.type === "latestText") {
+          // Handle response for latest text request
+          setTextInput(data.text);
+          setIsExisting(data.text !== "");
+          setNotification("Text updated successfully!");
+          setTimeout(() => setNotification(""), 3000);
+        }
       }
-    }
 
-    socket.onclose = () => {
-      console.log("Disconnected from server");
-      setNotification("Connection lost. Please refresh the page.");
-    }
+      setWs(socket);
+    };
+
+    connectWebSocket();
 
     return () => {
-      socket.close(); 
-    }
+      if (ws) {
+        ws.close();
+      }
+    };
   }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
