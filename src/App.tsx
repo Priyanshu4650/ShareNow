@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
-import "./App.css"; 
+import "./App.css";
 
 // Get the current environment
 const isDevelopment = import.meta.env.DEV;
 
 // Update WebSocket URL based on environment
-const SERVER_URL = isDevelopment 
+const SERVER_URL = isDevelopment
   ? 'ws://localhost:8000'  // Development environment
   : 'wss://sharenow-v77d.onrender.com';  // Production environment
 
@@ -20,7 +20,8 @@ const App: React.FC = () => {
   const [notification, setNotification] = useState<string>("");
   const [networkId, setNetworkId] = useState<string>("");
   const [needsUpdate, setNeedsUpdate] = useState(false);
-  
+  const [loading, setLoading] = useState<Boolean>(false);
+
   // Function to fetch latest text
   const fetchLatestText = useCallback(async () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -50,22 +51,23 @@ const App: React.FC = () => {
 
       socket.onmessage = (e) => {
         const data = JSON.parse(e.data);
-        
-        if(data.type === "init") {
+
+        if (data.type === "init") {
           setTextInput(data.text);
           setIsExisting(data.text !== "");
           setNetworkId(data.networkId);
-        } else if(data.type === "save" && !data.notification.includes("update")) {
+          setLoading(true);
+        } else if (data.type === "save" && !data.notification.includes("update")) {
           // Only update text for the sender
           setTextInput(data.text);
           setIsExisting(data.text !== "");
           setNotification(data.notification);
           setTimeout(() => setNotification(""), 5000);
-        } else if(data.type === "notification") {
+        } else if (data.type === "notification") {
           // For other clients, show update notification
           setNotification(data.notification);
           setNeedsUpdate(true);
-        } else if(data.type === "latestText") {
+        } else if (data.type === "latestText") {
           // Handle response for latest text request
           setTextInput(data.text);
           setIsExisting(data.text !== "");
@@ -88,7 +90,7 @@ const App: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if(ws && ws.readyState === WebSocket.OPEN) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "save", text: textInput }));
       setIsExisting(true);
     }
@@ -101,54 +103,61 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="container">
-      {notification && (
-        <div 
-          className={`notification ${
-            needsUpdate ? "warning" : 
-            notification.includes("success") ? "success" : ""
-          }`}
-        >
-          {notification}
-          {needsUpdate && (
-            <button 
-              className="update-button"
-              onClick={fetchLatestText}
+    (
+      loading ?
+        <div className="container">
+          {notification && (
+            <div
+              className={`notification ${needsUpdate ? "warning" :
+                notification.includes("success") ? "success" : ""
+                }`}
             >
-              Update Now
-            </button>
+              {notification}
+              {needsUpdate && (
+                <button
+                  className="update-button"
+                  onClick={fetchLatestText}
+                >
+                  Update Now
+                </button>
+              )}
+            </div>
           )}
-        </div>
-      )}
-      <h1 className="title">ShareNow</h1>
-      {networkId && (
-        <p className="network-info">Connected to network: {networkId}</p>
-      )}
-      <form onSubmit={handleSubmit} className="form">
-        <input 
-          className="input"
-          placeholder="Enter the text you want to share" 
-          type="text" 
-          value={textInput} 
-          onChange={(e) => setTextInput(e.target.value)} 
-        />
+          <h1 className="title">ShareNow</h1>
+          {networkId && (
+            <p className="network-info">Connected to network: {networkId}</p>
+          )}
+          <form onSubmit={handleSubmit} className="form">
+            <input
+              className="input"
+              placeholder="Enter the text you want to share"
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+            />
 
-        <div className="button-group">
-          {textInput !== "" && isExisting && (
-            <button 
-              type="button"
-              className={`button copy-button ${copied ? 'copied' : ''}`}
-              onClick={handleCopy}
-            >
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          )}
-          <button type="submit" className="button save-button">
-            Save
-          </button>
+            <div className="button-group">
+              {textInput !== "" && isExisting && (
+                <button
+                  type="button"
+                  className={`button copy-button ${copied ? 'copied' : ''}`}
+                  onClick={handleCopy}
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              )}
+              <button type="submit" className="button save-button">
+                Save
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
-    </div>
+        :
+        <div className="loader-container">
+          <div className="loader"></div>
+        </div>
+
+    )
   );
 }
 
