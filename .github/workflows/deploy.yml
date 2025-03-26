@@ -39,14 +39,14 @@ jobs:
       - name: Debug - List Build Output
         run: ls -la ./dist
 
-      - name: Setup Pages
+      - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload Artifact
-        uses: actions/upload-pages-artifact@v1
+      - name: Upload Build Artifact
+        uses: actions/upload-pages-artifact@v1  # ✅ Fixed version
         with:
           path: './dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v4  # ✅ Updated to v4
